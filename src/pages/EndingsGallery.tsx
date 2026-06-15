@@ -485,35 +485,8 @@ function EndingDetailModal({
               </div>
             )}
 
-            {showContent && ending.keyChoices.length > 0 && (
-              <div>
-              <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                <Star size={14} className="text-amber-400" />
-                关键选择路径
-              </h4>
-              <div className="relative ml-2 pl-4 border-l-2 border-amber-500/30 space-y-3">
-                {ending.keyChoices.map((choiceId, idx) => {
-                  const timestamp = getChoiceTimestamp(choiceId);
-                  return (
-                    <div key={choiceId} className="relative">
-                      <div className="absolute -left-[25px] top-1 w-4 h-4 rounded-full bg-amber-400 flex items-center justify-center">
-                        <span className="text-[10px] text-[#0a1628] font-bold">{idx + 1}</span>
-                      </div>
-                      <div className="p-3 rounded-xl bg-white/5 border border-white/10">
-                        <p className="text-sm text-gray-200 leading-relaxed">
-                          {getKeyChoiceText(choiceId)}
-                        </p>
-                        {timestamp && (
-                          <p className="text-[10px] text-gray-500 mt-1">
-                            {new Date(timestamp).toLocaleDateString()}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            {showContent && (
+              <EndingTimelineSection ending={ending} save={save} />
             )}
 
             {showContent && ending.characterRoutes.length > 0 && (
@@ -540,6 +513,211 @@ function EndingDetailModal({
               </div>
             )}
           </div>
+      </div>
+    </div>
+  );
+}
+
+interface TimelineItem {
+  type: 'main_story' | 'navigation' | 'mail_reply' | 'item_combine';
+  title: string;
+  subtitle?: string;
+  choiceText: string;
+  timestamp: number;
+  consequences: string[];
+  isKey: boolean;
+}
+
+function EndingTimelineSection({
+  ending,
+  save
+}: {
+  ending: import('@/types').Ending;
+  save: import('@/types').PlayerSave;
+}) {
+  const timeline: TimelineItem[] = [];
+
+  for (const choice of save.choices) {
+    const isInKeyChoices = ending.keyChoices.includes(choice.choiceId);
+    const charRouteMatch = ending.characterRoutes.length > 0 && (
+      choice.source === 'mail_reply' ||
+      choice.source === 'main_story'
+    );
+    const includeByDefault = choice.source === 'navigation' ||
+                             choice.source === 'item_combine' ||
+                             choice.isKeyChoice;
+
+    if (isInKeyChoices || (charRouteMatch && (choice.isKeyChoice || ending.characterRoutes.length > 0)) || includeByDefault) {
+      let title = '';
+      let subtitle = '';
+
+      if (choice.source === 'main_story') {
+        const ch = chapters.find(c => c.id === choice.chapterId);
+        title = ch?.title || '主线章节';
+        subtitle = choice.context || '';
+      } else if (choice.source === 'navigation') {
+        title = '航行事件';
+        subtitle = choice.context || '星际航行';
+      } else if (choice.source === 'mail_reply') {
+        title = '邮件回复';
+        subtitle = choice.context || '剧情邮件';
+      } else if (choice.source === 'item_combine') {
+        title = '物品合成';
+        subtitle = choice.context || '合成配方';
+      }
+
+      timeline.push({
+        type: choice.source as TimelineItem['type'],
+        title,
+        subtitle,
+        choiceText: choice.choiceText,
+        timestamp: choice.timestamp,
+        consequences: choice.consequences,
+        isKey: choice.isKeyChoice || isInKeyChoices
+      });
+    }
+  }
+
+  timeline.sort((a, b) => a.timestamp - b.timestamp);
+
+  const typeIcons: Record<TimelineItem['type'], string> = {
+    main_story: '📖',
+    navigation: '🚀',
+    mail_reply: '📧',
+    item_combine: '⚗️'
+  };
+
+  const typeLabels: Record<TimelineItem['type'], string> = {
+    main_story: '主线',
+    navigation: '航行',
+    mail_reply: '邮件',
+    item_combine: '合成'
+  };
+
+  const typeColors: Record<TimelineItem['type'], string> = {
+    main_story: '#c77dff',
+    navigation: '#4cc9f0',
+    mail_reply: '#d4a84b',
+    item_combine: '#06d6a0'
+  };
+
+  const formatConsequence = (c: string) => {
+    const [type, value] = c.split(':');
+    const typeNames: Record<string, string> = {
+      item: '获得物品',
+      clue: '获得线索',
+      reputation: '声望',
+      affection: '好感',
+      ending: '解锁结局',
+      trust: '信任'
+    };
+    return `${typeNames[type] || type}：${value || ''}`;
+  };
+
+  if (timeline.length === 0) {
+    return (
+      <div className="p-4 rounded-xl bg-white/5 border border-white/10 text-center">
+        <p className="text-xs text-gray-500">暂无时间线数据</p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="text-sm font-semibold flex items-center gap-2">
+          <Target size={14} className="text-purple-400" />
+          达成时间线
+        </h4>
+        <span className="text-[10px] text-gray-500">共 {timeline.length} 个节点</span>
+      </div>
+
+      <div className="space-y-3">
+        {timeline.map((item, idx) => (
+          <div
+            key={`${item.type}-${item.timestamp}-${idx}`}
+            className={`relative pl-7 ${idx < timeline.length - 1 ? 'pb-3' : ''}`}
+          >
+            {idx < timeline.length - 1 && (
+              <div
+                className="absolute left-[13px] top-8 bottom-0 w-px"
+                style={{
+                  background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.05) 100%)'
+                }}
+              />
+            )}
+
+            <div
+              className={`absolute left-0 top-1 w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+                item.isKey ? 'ring-2 ring-amber-400/50' : ''
+              }`}
+              style={{
+                background: `${typeColors[item.type]}20`,
+                borderColor: typeColors[item.type]
+              }}
+            >
+              <span className="text-[10px]">{typeIcons[item.type]}</span>
+            </div>
+
+            <div
+              className={`rounded-xl border overflow-hidden ${
+                item.isKey
+                  ? 'border-amber-500/30 bg-amber-500/5'
+                  : 'border-white/10 bg-white/5'
+              }`}
+            >
+              <div className="flex items-center justify-between px-3 py-2 border-b border-white/5 bg-white/[0.02]">
+                <div className="flex items-center gap-2">
+                  <span
+                    className="text-[10px] px-1.5 py-0.5 rounded"
+                    style={{
+                      background: `${typeColors[item.type]}15`,
+                      color: typeColors[item.type],
+                      border: `1px solid ${typeColors[item.type]}30`
+                    }}
+                  >
+                    {typeLabels[item.type]}
+                  </span>
+                  <span className="text-xs font-medium">{item.title}</span>
+                  {item.isKey && (
+                    <Star size={10} className="text-amber-400" fill="currentColor" />
+                  )}
+                </div>
+                <span className="text-[10px] text-gray-600">
+                  {new Date(item.timestamp).toLocaleDateString()}
+                </span>
+              </div>
+
+              <div className="p-3 space-y-2">
+                {item.subtitle && (
+                  <p className="text-[10px] text-gray-500">{item.subtitle}</p>
+                )}
+                <p className="text-sm text-gray-200 leading-relaxed">
+                  {item.choiceText}
+                </p>
+                {item.consequences.length > 0 && (
+                  <div className="pt-2 mt-2 border-t border-white/5">
+                    <div className="flex flex-wrap gap-1">
+                      {item.consequences.slice(0, 4).map((c, i) => (
+                        <span
+                          key={i}
+                          className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-gray-400 border border-white/10"
+                        >
+                          {formatConsequence(c)}
+                        </span>
+                      ))}
+                      {item.consequences.length > 4 && (
+                        <span className="text-[10px] text-gray-600">
+                          +{item.consequences.length - 4}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

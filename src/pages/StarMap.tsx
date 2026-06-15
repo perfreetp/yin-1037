@@ -1,17 +1,20 @@
 import { useState, useCallback, useMemo } from 'react';
 import { PageLayout } from '@/components/layout/PageLayout';
-import { planets, planetRoutes, getRouteBetweenPlanets, getRiskColor, getRiskText, getEventTypeText } from '@/data/events';
+import { planets, planetRoutes, eventChains, randomEvents, getRouteBetweenPlanets, getRiskColor, getRiskText, getEventTypeText } from '@/data/events';
 import { useGameStore } from '@/store/gameStore';
-import type { Planet, PlanetRoute } from '@/types';
-import { X, MapPin, Rocket, Navigation, AlertTriangle, Clock, Calendar, Scroll, ChevronRight, Ship } from 'lucide-react';
+import { mailTemplates } from '@/data/mails';
+import type { Planet, PlanetRoute, EventChain } from '@/types';
+import { X, MapPin, Rocket, Navigation, AlertTriangle, Clock, Calendar, Scroll, ChevronRight, Ship, Link2, CheckCircle2, Circle, HelpCircle, User } from 'lucide-react';
 
 export default function StarMap() {
+  const [activeTab, setActiveTab] = useState<'map' | 'chains'>('map');
   const [selectedPlanet, setSelectedPlanet] = useState<Planet | null>(null);
   const [targetPlanet, setTargetPlanet] = useState<Planet | null>(null);
   const [showTravelConfirm, setShowTravelConfirm] = useState(false);
   const [showTravelLogs, setShowTravelLogs] = useState(false);
   const [selectedLogId, setSelectedLogId] = useState<string | null>(null);
   const [isTraveling, setIsTraveling] = useState(false);
+  const [selectedChainId, setSelectedChainId] = useState<string | null>(null);
   const { save, triggerRandomEvent, startTravel, completeTravel } = useGameStore();
 
   const currentPlanet = useMemo(() => {
@@ -49,7 +52,11 @@ export default function StarMap() {
     startTravel(currentPlanet.id, currentPlanet.name, targetPlanet.id, targetPlanet.name);
 
     setTimeout(() => {
-      const eventTriggered = triggerRandomEvent('space_travel');
+      const eventTriggered = triggerRandomEvent(
+        'space_travel',
+        routeToTarget?.riskLevel,
+        routeToTarget?.possibleEvents
+      );
       setIsTraveling(false);
       completeTravel();
 
@@ -71,6 +78,33 @@ export default function StarMap() {
   return (
     <PageLayout title="星图">
       <div className="relative px-4 py-2">
+        <div className="flex gap-1 p-1 mb-3 rounded-xl bg-white/5 border border-white/10">
+          <button
+            onClick={() => setActiveTab('map')}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-all ${
+              activeTab === 'map'
+                ? 'bg-white/10 text-white'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            <Ship size={14} />
+            星图
+          </button>
+          <button
+            onClick={() => setActiveTab('chains')}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-all ${
+              activeTab === 'chains'
+                ? 'bg-white/10 text-white'
+                : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            <Link2 size={14} />
+            事件线索
+          </button>
+        </div>
+
+        {activeTab === 'map' && (
+          <>
         <div className="mb-3 p-3 rounded-xl border border-cyan-500/20 bg-cyan-500/5">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -236,6 +270,15 @@ export default function StarMap() {
             );
           })}
         </div>
+          </>
+        )}
+
+        {activeTab === 'chains' && (
+          <EventChainsPanel
+            save={save}
+            onSelectChain={(id) => setSelectedChainId(id)}
+          />
+        )}
       </div>
 
       {selectedPlanet && (
@@ -275,7 +318,385 @@ export default function StarMap() {
           formatDuration={formatDuration}
         />
       )}
+
+      {selectedChainId && (
+        <EventChainDetailModal
+          chainId={selectedChainId}
+          save={save}
+          onClose={() => setSelectedChainId(null)}
+        />
+      )}
     </PageLayout>
+  );
+}
+
+function EventChainsPanel({
+  save,
+  onSelectChain
+}: {
+  save: any;
+  onSelectChain: (id: string) => void;
+}) {
+  const chains = eventChains.map((chain) => {
+    const startingEvent = randomEvents.find(e => e.id === chain.startingEventId);
+    const startChoice = save.choices.find((c: any) => c.sceneId === `event_${chain.startingEventId}`);
+    const hasStarted = !!startChoice;
+
+    const totalNodes = 1 + chain.subsequentEvents.length;
+    let completedNodes = hasStarted ? 1 : 0;
+
+    if (hasStarted) {
+      for (const sub of chain.subsequentEvents) {
+        const triggerChoice = save.choices.find((c: any) => c.choiceId === sub.triggerChoiceId);
+        if (triggerChoice) {
+          if (sub.nextEventId.startsWith('mail_')) {
+            const mailFound = save.mails.some((m: any) => m.id === sub.nextEventId);
+            if (mailFound) completedNodes++;
+          } else {
+            const eventDone = save.choices.some((c: any) => c.sceneId === `event_${sub.nextEventId}`);
+            if (eventDone) completedNodes++;
+          }
+        }
+      }
+    }
+
+    return {
+      chain,
+      hasStarted,
+      completedNodes,
+      totalNodes,
+      progress: Math.round((completedNodes / totalNodes) * 100),
+      startingEvent
+    };
+  });
+
+  const activeCount = chains.filter(c => c.hasStarted).length;
+
+  return (
+    <div>
+      {activeCount > 0 && (
+        <div className="mb-4 p-4 rounded-2xl border border-purple-500/20 bg-purple-500/5">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-purple-500/20">
+              <Link2 size={20} className="text-purple-400" />
+            </div>
+            <div>
+              <p className="text-[10px] text-gray-400 mb-1">进行中的线索</p>
+              <p className="text-xl font-bold text-purple-300">{activeCount} / {chains.length}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="space-y-3">
+        {chains.map(({ chain, hasStarted, progress, startingEvent }) => (
+          <button
+            key={chain.id}
+            onClick={() => hasStarted && onSelectChain(chain.id)}
+            disabled={!hasStarted}
+            className={`w-full p-4 rounded-xl border text-left transition-all ${
+              hasStarted
+                ? 'border-white/10 bg-white/5 hover:bg-white/10'
+                : 'border-white/5 bg-white/[0.02] opacity-50 cursor-not-allowed'
+            }`}
+          >
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex items-start gap-3">
+                <div className={`p-2 rounded-xl ${
+                  hasStarted ? 'bg-purple-500/20' : 'bg-gray-500/10'
+                }`}>
+                  {chain.id === 'chain_rescue' ? (
+                    <User size={18} className={hasStarted ? 'text-purple-400' : 'text-gray-600'} />
+                  ) : (
+                    <AlertTriangle size={18} className={hasStarted ? 'text-purple-400' : 'text-gray-600'} />
+                  )}
+                </div>
+                <div>
+                  <p className="text-sm font-semibold mb-1">
+                    {hasStarted ? chain.name : '未知线索'}
+                  </p>
+                  <p className="text-[10px] text-gray-500 leading-relaxed max-w-[200px]">
+                    {hasStarted ? chain.description : '触发相关事件后可查看详情'}
+                  </p>
+                </div>
+              </div>
+              {hasStarted && <ChevronRight size={16} className="text-gray-500 mt-1" />}
+            </div>
+
+            {hasStarted && startingEvent && (
+              <div className="pt-3 border-t border-white/5">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[10px] text-gray-500">
+                    触发节点：{startingEvent.title}
+                  </p>
+                  <p className="text-[10px] text-purple-400 font-medium">{progress}%</p>
+                </div>
+                <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-purple-400 to-purple-300 transition-all"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+              </div>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {activeCount === 0 && (
+        <div className="py-16 text-center">
+          <HelpCircle size={40} className="mx-auto mb-3 opacity-30 text-gray-600" />
+          <p className="text-sm text-gray-500">暂无进行中的线索</p>
+          <p className="text-[10px] text-gray-600 mt-1">多进行星际航行会遇到各种事件</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EventChainDetailModal({
+  chainId,
+  save,
+  onClose
+}: {
+  chainId: string;
+  save: any;
+  onClose: () => void;
+}) {
+  const chain = eventChains.find(c => c.id === chainId);
+  if (!chain) return null;
+
+  const nodes: {
+    id: string;
+    title: string;
+    type: 'event' | 'mail' | 'next';
+    status: 'done' | 'current' | 'locked';
+    description: string;
+    choiceText?: string;
+    timestamp?: number;
+    vagueHint?: string;
+  }[] = [];
+
+  const startChoice = save.choices.find((c: any) => c.sceneId === `event_${chain.startingEventId}`);
+  const startEvent = randomEvents.find(e => e.id === chain.startingEventId);
+
+  nodes.push({
+    id: chain.startingEventId,
+    title: startEvent?.title || '起点事件',
+    type: 'event',
+    status: startChoice ? 'done' : 'locked',
+    description: startEvent?.description || '',
+    choiceText: startChoice?.choiceText,
+    timestamp: startChoice?.timestamp,
+    vagueHint: '在航行中遇到特定事件时触发'
+  });
+
+  for (let i = 0; i < chain.subsequentEvents.length; i++) {
+    const sub = chain.subsequentEvents[i];
+    const prevTriggered = i === 0
+      ? !!save.choices.find((c: any) => c.choiceId === sub.triggerChoiceId)
+      : !!save.choices.find((c: any) => c.choiceId === chain.subsequentEvents[i - 1].triggerChoiceId);
+
+    const isMail = sub.nextEventId.startsWith('mail_');
+    let isDone = false;
+    let choiceText: string | undefined;
+    let timestamp: number | undefined;
+    let title: string = '下一步';
+    let description: string = '';
+    let vagueHint: string = '';
+
+    if (isMail) {
+      const mailTemplate = mailTemplates.find((m: any) => m.id === sub.nextEventId);
+      title = mailTemplate?.subject || '后续邮件';
+      description = mailTemplate?.content || '';
+      const savedMail = save.mails.find((m: any) => m.id === sub.nextEventId);
+      if (savedMail) {
+        isDone = true;
+        if (savedMail.selectedReply) {
+          const reply = mailTemplate?.replyOptions?.find((r: any) => r.id === savedMail.selectedReply);
+          choiceText = reply?.text || savedMail.selectedReply;
+        }
+        timestamp = savedMail.timestamp;
+      }
+      vagueHint = '不久后会收到一封意外的邮件……';
+    } else {
+      const event = randomEvents.find(e => e.id === sub.nextEventId);
+      title = event?.title || '后续事件';
+      description = event?.description || '';
+      const done = save.choices.find((c: any) => c.sceneId === `event_${sub.nextEventId}`);
+      if (done) {
+        isDone = true;
+        choiceText = done.choiceText;
+        timestamp = done.timestamp;
+      }
+      if (chainId === 'chain_rescue') {
+        vagueHint = '下次航行也许会遇到优惠的买卖……';
+      } else if (chainId === 'chain_merchant') {
+        vagueHint = '下次航行商人可能带来更稀有的货物……';
+      }
+    }
+
+    const triggerChoiceMade = !!save.choices.find((c: any) => c.choiceId === sub.triggerChoiceId);
+    const status = isDone ? 'done' : (triggerChoiceMade ? 'current' : 'locked');
+
+    nodes.push({
+      id: sub.nextEventId,
+      title,
+      type: isMail ? 'mail' : 'event',
+      status,
+      description,
+      choiceText,
+      timestamp,
+      vagueHint
+    });
+  }
+
+  const doneCount = nodes.filter(n => n.status === 'done').length;
+  const progress = Math.round((doneCount / nodes.length) * 100);
+
+  const delayNames: Record<string, string> = {
+    immediate: '立即',
+    next_travel: '下次航行',
+    next_chapter: '下一章',
+    delayed_mail: '延迟邮件'
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center"
+      onClick={onClose}
+    >
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+      <div
+        className="relative w-full max-w-[480px] h-[75vh] rounded-t-3xl overflow-hidden bg-[#0a1628] border-t border-white/10 flex flex-col"
+        style={{ animation: 'slideUp 0.3s ease-out' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="sticky top-0 flex items-center justify-between p-4 border-b border-white/10 bg-[#0a1628] z-10">
+          <div>
+            <h3 className="font-semibold flex items-center gap-2" style={{ fontFamily: "'Cinzel', 'Noto Serif SC', serif" }}>
+              <Link2 size={16} className="text-purple-400" />
+              {chain.name}
+            </h3>
+            <p className="text-[10px] text-gray-500 mt-0.5">
+              进度 {progress}%（{doneCount}/{nodes.length}）
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="p-3 border-b border-white/5 bg-white/[0.02]">
+          <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-purple-400 via-pink-400 to-purple-300 transition-all"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="relative ml-3 pl-6 border-l-2 border-purple-500/20 space-y-4">
+            {nodes.map((node, idx) => (
+              <div key={node.id} className="relative">
+                <div className={`absolute -left-[30px] top-0 w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                  node.status === 'done'
+                    ? 'bg-emerald-400 border-emerald-300'
+                    : node.status === 'current'
+                    ? 'bg-amber-400 border-amber-300 animate-pulse'
+                    : 'bg-gray-700 border-gray-600'
+                }`}>
+                  {node.status === 'done' ? (
+                    <CheckCircle2 size={10} className="text-[#0a1628]" />
+                  ) : node.status === 'current' ? (
+                    <Circle size={10} className="text-[#0a1628]" fill="currentColor" />
+                  ) : (
+                    <HelpCircle size={10} className="text-gray-500" />
+                  )}
+                </div>
+
+                <div className={`p-3 rounded-xl border ${
+                  node.status === 'locked'
+                    ? 'bg-white/[0.02] border-white/5 opacity-60'
+                    : node.status === 'current'
+                    ? 'bg-amber-500/5 border-amber-500/20'
+                    : 'bg-white/5 border-white/10'
+                }`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                        node.type === 'mail'
+                          ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                          : 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'
+                      }`}>
+                        {node.type === 'mail' ? '📧 邮件' : '🌟 事件'}
+                      </span>
+                      <span className="text-xs font-medium">
+                        {node.status === 'locked' ? '???' : node.title}
+                      </span>
+                    </div>
+                    <span className={`text-[10px] ${
+                      node.status === 'done' ? 'text-emerald-400' :
+                      node.status === 'current' ? 'text-amber-400' : 'text-gray-600'
+                    }`}>
+                      {node.status === 'done' ? '已完成' :
+                       node.status === 'current' ? '进行中' : '未解锁'}
+                    </span>
+                  </div>
+
+                  {node.status !== 'locked' && (
+                    <>
+                      <p className="text-xs text-gray-300 leading-relaxed mb-2">
+                        {node.description.length > 100
+                          ? `${node.description.slice(0, 100)}…`
+                          : node.description}
+                      </p>
+                      {node.choiceText && (
+                        <p className="text-[10px] text-cyan-300 italic bg-cyan-500/5 p-2 rounded-lg border border-cyan-500/10">
+                          你的选择："{node.choiceText}"
+                        </p>
+                      )}
+                      {node.timestamp && (
+                        <p className="text-[10px] text-gray-500 mt-1">
+                          {new Date(node.timestamp).toLocaleString()}
+                        </p>
+                      )}
+                    </>
+                  )}
+
+                  {node.status === 'current' && node.vagueHint && (
+                    <div className="mt-2 p-2 rounded-lg bg-amber-500/5 border border-amber-500/10">
+                      <p className="text-[10px] text-amber-300 flex items-start gap-1">
+                        <HelpCircle size={10} className="mt-0.5 flex-shrink-0" />
+                        <span>{node.vagueHint}</span>
+                      </p>
+                    </div>
+                  )}
+
+                  {node.status === 'locked' && (
+                    <p className="text-[10px] text-gray-600">
+                      完成上一步后继续……
+                    </p>
+                  )}
+
+                  {idx < chain.subsequentEvents.length && idx > 0 && chain.subsequentEvents[idx - 1] && (
+                    <div className="mt-2 pt-2 border-t border-white/5">
+                      <p className="text-[10px] text-gray-600">
+                        触发方式：{delayNames[chain.subsequentEvents[idx - 1].delay] || chain.subsequentEvents[idx - 1].delay}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 

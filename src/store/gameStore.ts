@@ -37,6 +37,7 @@ interface GameState {
   currentEvent: RandomEvent | null;
   bgmPlaying: boolean;
   pendingTravelLog: TravelLog | null;
+  pendingTravelSnapshot: { factionReputation: Record<string, number>; items: string[]; clues: string[] } | null;
   pendingEventChainTriggers: { eventId: string; delay: string }[];
 
   initSave: () => void;
@@ -56,7 +57,7 @@ interface GameState {
   checkEndingUnlocks: () => void;
   startReplay: (chapterId: string) => void;
   exitReplay: () => void;
-  triggerRandomEvent: (location: string) => boolean;
+  triggerRandomEvent: (location: string, routeRisk?: string, possibleEvents?: string[]) => boolean;
   handleEventChoice: (choiceId: string) => void;
   closeEvent: () => void;
   startTravel: (fromPlanetId: string, fromPlanetName: string, toPlanetId: string, toPlanetName: string) => void;
@@ -126,6 +127,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   currentEvent: null,
   bgmPlaying: false,
   pendingTravelLog: null,
+  pendingTravelSnapshot: null,
   pendingEventChainTriggers: [],
 
   initSave: () => {
@@ -546,16 +548,47 @@ export const useGameStore = create<GameState>((set, get) => ({
     }));
   },
 
-  triggerRandomEvent: (location) => {
+  triggerRandomEvent: (location, routeRisk, possibleEvents) => {
     const state = get();
     if (state.isReplayMode || state.currentEvent) return false;
 
-    const availableEvents = randomEvents.filter(
-      (e) =>
-        e.triggerLocation.includes(location) &&
-        Math.random() < e.probability &&
-        !state.save.choices.some((c) => c.sceneId.startsWith(`event_${e.id}`))
-    );
+    const riskEventTypes: Record<string, string[]> = {
+      safe: ['merchant', 'discovery', 'none'],
+      low: ['merchant', 'discovery', 'storm', 'none'],
+      medium: ['storm', 'merchant', 'distress', 'discovery', 'none'],
+      high: ['storm', 'pirate', 'distress', 'merchant'],
+      extreme: ['pirate', 'storm', 'distress', 'discovery']
+    };
+
+    const riskProbBoost: Record<string, number> = {
+      safe: -0.15,
+      low: -0.05,
+      medium: 0,
+      high: 0.1,
+      extreme: 0.2
+    };
+
+    const allowedTypes = routeRisk
+      ? (riskEventTypes[routeRisk] || riskEventTypes.medium)
+      : null;
+
+    const availableEvents = randomEvents.filter((e) => {
+      if (!e.triggerLocation.includes(location)) return false;
+
+      if (possibleEvents && possibleEvents.length > 0 && !possibleEvents.includes(e.eventType)) return false;
+
+      if (allowedTypes && !allowedTypes.includes(e.eventType) && e.eventType !== 'none') return false;
+
+      let prob = e.probability;
+      if (routeRisk) prob = Math.max(0, Math.min(1, prob + (riskProbBoost[routeRisk] || 0)));
+
+      if (Math.random() >= prob) return false;
+
+      const alreadyHad = state.save.choices.some((c) => c.sceneId.startsWith(`event_${e.id}`));
+      if (alreadyHad && e.probability < 1) return false;
+
+      return true;
+    });
 
     if (availableEvents.length === 0) return false;
 
@@ -570,6 +603,8 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     const choice = state.currentEvent.choices.find((c) => c.id === choiceId);
     if (!choice) return;
+
+    const beforeSnapshot = state.pendingTravelSnapshot;
 
     set((state) => {
       if (!state.currentEvent) return state;
@@ -593,15 +628,53 @@ export const useGameStore = create<GameState>((set, get) => ({
         context: state.currentEvent.title
       };
 
+      let updatedPendingLog = state.pendingTravelLog;
+
       if (state.pendingTravelLog) {
-        get().addEventToTravelLog(
-          state.currentEvent.id,
-          state.currentEvent.title,
-          state.currentEvent.eventType,
-          choice.id,
-          choice.text,
-          eventEffects
-        );
+        const beforeItems = beforeSnapshot?.items || state.save.inventory.map(i => i.itemId);
+        const beforeClues = beforeSnapshot?.clues || [...state.save.clues];
+        const beforeRep = beforeSnapshot?.factionReputation || { ...state.save.factionReputation };
+
+        const afterItems = effectResult.save.inventory.map(i => i.itemId);
+        const afterClues = effectResult.save.clues;
+        const afterRep = effectResult.save.factionReputation;
+
+        const newItems = afterItems.filter(id => !beforeItems.includes(id));
+        const newClues = afterClues.filter(c => !beforeClues.includes(c));
+        const repChanges: { faction: string; amount: number }[] = [];
+
+        for (const faction of Object.keys(afterRep)) {
+          const diff = (afterRep[faction] || 0) - (beforeRep[faction] || 0);
+          if (diff !== 0) repChanges.push({ faction, amount: diff });
+        }
+        for (const faction of Object.keys(beforeRep)) {
+          if (!(faction in afterRep) && beforeRep[faction]) {
+            repChanges.push({ faction, amount: -(beforeRep[faction] || 0) });
+          }
+        }
+
+        const logEvent: TravelLogEvent = {
+          eventId: state.currentEvent.id,
+          eventTitle: state.currentEvent.title,
+          eventType: state.currentEvent.eventType as TravelLogEvent['eventType'],
+          choiceId: choice.id,
+          choiceText: choice.text,
+          effects: eventEffects,
+          timestamp: Date.now()
+        };
+
+        updatedPendingLog = {
+          ...state.pendingTravelLog,
+          eventsEncountered: [...state.pendingTravelLog.eventsEncountered, logEvent],
+          rewards: {
+            items: [...new Set([...state.pendingTravelLog.rewards.items, ...newItems])],
+            clues: [...new Set([...state.pendingTravelLog.rewards.clues, ...newClues])],
+            reputationChanges: [
+              ...state.pendingTravelLog.rewards.reputationChanges,
+              ...repChanges
+            ]
+          }
+        };
       }
 
       const notifications: Notification[] = [...state.notifications];
@@ -621,6 +694,7 @@ export const useGameStore = create<GameState>((set, get) => ({
           choices: [...state.save.choices, playerChoice]
         },
         currentEvent: null,
+        pendingTravelLog: updatedPendingLog,
         notifications
       };
     });
@@ -757,6 +831,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   startTravel: (fromPlanetId, fromPlanetName, toPlanetId, toPlanetName) => {
+    const state = get();
     const route = getRouteBetweenPlanets(fromPlanetId, toPlanetId);
     set({
       pendingTravelLog: {
@@ -770,6 +845,11 @@ export const useGameStore = create<GameState>((set, get) => ({
         routeRisk: route?.riskLevel || 'low',
         eventsEncountered: [],
         rewards: { items: [], clues: [], reputationChanges: [] }
+      },
+      pendingTravelSnapshot: {
+        factionReputation: { ...state.save.factionReputation },
+        items: state.save.inventory.map(i => i.itemId),
+        clues: [...state.save.clues]
       }
     });
   },
@@ -778,9 +858,56 @@ export const useGameStore = create<GameState>((set, get) => ({
     set((state) => {
       if (!state.pendingTravelLog) return state;
 
+      let finalRewards = { ...state.pendingTravelLog.rewards };
+      if (state.pendingTravelSnapshot) {
+        const beforeItems = state.pendingTravelSnapshot.items;
+        const beforeClues = state.pendingTravelSnapshot.clues;
+        const beforeRep = state.pendingTravelSnapshot.factionReputation;
+
+        const afterItems = state.save.inventory.map(i => i.itemId);
+        const afterClues = state.save.clues;
+        const afterRep = state.save.factionReputation;
+
+        const newItems = afterItems.filter(id => !beforeItems.includes(id));
+        const newClues = afterClues.filter(c => !beforeClues.includes(c));
+        const repChanges: { faction: string; amount: number }[] = [];
+
+        for (const faction of Object.keys(afterRep)) {
+          const diff = (afterRep[faction] || 0) - (beforeRep[faction] || 0);
+          if (diff !== 0) {
+            const existing = finalRewards.reputationChanges.find(r => r.faction === faction);
+            if (existing) {
+              existing.amount = diff;
+            } else {
+              repChanges.push({ faction, amount: diff });
+            }
+          }
+        }
+        for (const faction of Object.keys(beforeRep)) {
+          if (!(faction in afterRep) && beforeRep[faction]) {
+            repChanges.push({ faction, amount: -(beforeRep[faction] || 0) });
+          }
+        }
+
+        const existingRepFactions = finalRewards.reputationChanges.map(r => r.faction);
+        for (const rc of repChanges) {
+          if (!existingRepFactions.includes(rc.faction)) {
+            finalRewards.reputationChanges.push(rc);
+          }
+        }
+
+        for (const id of newItems) {
+          if (!finalRewards.items.includes(id)) finalRewards.items.push(id);
+        }
+        for (const c of newClues) {
+          if (!finalRewards.clues.includes(c)) finalRewards.clues.push(c);
+        }
+      }
+
       const completedLog: TravelLog = {
         ...state.pendingTravelLog,
-        arrivalTime: Date.now()
+        arrivalTime: Date.now(),
+        rewards: finalRewards
       };
 
       return {
@@ -789,7 +916,8 @@ export const useGameStore = create<GameState>((set, get) => ({
           currentPlanetId: state.pendingTravelLog.toPlanetId,
           travelLogs: [completedLog, ...state.save.travelLogs]
         },
-        pendingTravelLog: null
+        pendingTravelLog: null,
+        pendingTravelSnapshot: null
       };
     });
 
