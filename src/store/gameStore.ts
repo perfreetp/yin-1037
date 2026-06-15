@@ -6,7 +6,9 @@ import type {
   Notification,
   PlayerChoice,
   RandomEvent,
-  ChoiceEffect
+  ChoiceEffect,
+  TravelLog,
+  TravelLogEvent
 } from '@/types';
 import {
   defaultSettings,
@@ -19,9 +21,9 @@ import {
   generateSaveId
 } from '@/utils/storage';
 import { chapters, getSceneById } from '@/data/chapters';
-import { applyEffects } from '@/utils/conditions';
+import { applyEffects, tryCombineItems } from '@/utils/conditions';
 import { mailTemplates, checkMailTrigger, createMailFromTemplate } from '@/data/mails';
-import { randomEvents } from '@/data/events';
+import { randomEvents, eventChains, getRouteBetweenPlanets } from '@/data/events';
 import { endings } from '@/data/endings';
 import { checkCondition } from '@/utils/conditions';
 
@@ -34,6 +36,8 @@ interface GameState {
   replayChapterId: string | null;
   currentEvent: RandomEvent | null;
   bgmPlaying: boolean;
+  pendingTravelLog: TravelLog | null;
+  pendingEventChainTriggers: { eventId: string; delay: string }[];
 
   initSave: () => void;
   updateSettings: (settings: Partial<GameSettings>) => void;
@@ -44,8 +48,9 @@ interface GameState {
   markMailRead: (mailId: string) => void;
   replyMail: (mailId: string, replyId: string, effects: unknown[]) => void;
   checkAndTriggerMails: () => void;
-  addItemToInventory: (itemId: string) => void;
+  addItemToInventory: (itemId: string, fromChoice?: string) => void;
   removeItemFromInventory: (itemId: string) => void;
+  combineItems: (item1Id: string, item2Id: string, resultId: string, description: string) => boolean;
   completeChapter: (chapterId: string) => void;
   unlockChapter: (chapterId: string) => void;
   checkEndingUnlocks: () => void;
@@ -54,6 +59,11 @@ interface GameState {
   triggerRandomEvent: (location: string) => boolean;
   handleEventChoice: (choiceId: string) => void;
   closeEvent: () => void;
+  startTravel: (fromPlanetId: string, fromPlanetName: string, toPlanetId: string, toPlanetName: string) => void;
+  completeTravel: () => void;
+  addEventToTravelLog: (eventId: string, eventTitle: string, eventType: string, choiceId: string, choiceText: string, effects: string[]) => void;
+  checkEventChainTriggers: (choiceId: string) => void;
+  processPendingEventChains: (trigger: 'travel' | 'chapter') => void;
   unlockEnding: (endingId: string) => void;
   addNotification: (notification: Omit<Notification, 'id' | 'timestamp'>) => void;
   removeNotification: (id: string) => void;
@@ -98,6 +108,9 @@ const createInitialSave = (): PlayerSave => {
     achievements: [],
     choices: [],
     mails: welcomeTemplate ? [createMailFromTemplate(welcomeTemplate)] : [],
+    travelLogs: [],
+    currentPlanetId: 'planet_weaver',
+    eventChainProgress: {},
     playTime: 0,
     settings: defaultSettings
   };
@@ -112,6 +125,8 @@ export const useGameStore = create<GameState>((set, get) => ({
   replayChapterId: null,
   currentEvent: null,
   bgmPlaying: false,
+  pendingTravelLog: null,
+  pendingEventChainTriggers: [],
 
   initSave: () => {
     const autoSave = getAutoSave();
@@ -200,9 +215,13 @@ export const useGameStore = create<GameState>((set, get) => ({
         effects as Parameters<typeof applyEffects>[0],
         state.save
       );
+      const choiceWithSource: PlayerChoice = {
+        ...choice,
+        source: choice.source || 'main_story'
+      };
       const newSave = {
         ...effectResult.save,
-        choices: [...state.save.choices, choice]
+        choices: [...state.save.choices, choiceWithSource]
       };
 
       const notifications: Notification[] = [...state.notifications];
@@ -282,9 +301,26 @@ export const useGameStore = create<GameState>((set, get) => ({
         });
       }
 
+      const mail = state.save.mails.find(m => m.id === mailId);
+      const replyText = mail?.replyOptions?.find(r => r.id === replyId)?.text || '回复邮件';
+      const replyChoice: PlayerChoice = {
+        id: `choice_${Date.now()}`,
+        source: 'mail_reply',
+        chapterId: 'mailbox',
+        sceneId: `mail_${mailId}`,
+        choiceId: replyId,
+        choiceText: replyText,
+        timestamp: Date.now(),
+        isKeyChoice: false,
+        consequences: (effects as { type: string; target?: string; value?: unknown }[])
+          .map((e) => `${e.type}:${e.target || e.value}`),
+        context: mail?.subject || '回复邮件'
+      };
+
       return {
         save: {
           ...effectResult.save,
+          choices: [...state.save.choices, replyChoice],
           mails: state.save.mails.map((m) =>
             m.id === mailId ? { ...m, replied: true, selectedReply: replyId } : m
           )
@@ -337,7 +373,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
   },
 
-  addItemToInventory: (itemId) => {
+  addItemToInventory: (itemId, fromChoice) => {
     set((state) => {
       const existing = state.save.inventory.find((i) => i.itemId === itemId);
       if (existing) {
@@ -355,7 +391,7 @@ export const useGameStore = create<GameState>((set, get) => ({
           ...state.save,
           inventory: [
             ...state.save.inventory,
-            { itemId, quantity: 1, obtainedAt: Date.now() }
+            { itemId, quantity: 1, obtainedAt: Date.now(), fromChoice }
           ]
         }
       };
@@ -543,16 +579,30 @@ export const useGameStore = create<GameState>((set, get) => ({
         state.save
       );
 
+      const eventEffects = choice.effects.map((e) => `${e.type}:${e.target || e.value}`);
       const playerChoice: PlayerChoice = {
         id: `choice_${Date.now()}`,
+        source: 'navigation',
         chapterId: 'events',
         sceneId: `event_${state.currentEvent.id}`,
         choiceId: choice.id,
         choiceText: choice.text,
         timestamp: Date.now(),
         isKeyChoice: choice.isKeyChoice,
-        consequences: choice.effects.map((e) => `${e.type}:${e.target || e.value}`)
+        consequences: eventEffects,
+        context: state.currentEvent.title
       };
+
+      if (state.pendingTravelLog) {
+        get().addEventToTravelLog(
+          state.currentEvent.id,
+          state.currentEvent.title,
+          state.currentEvent.eventType,
+          choice.id,
+          choice.text,
+          eventEffects
+        );
+      }
 
       const notifications: Notification[] = [...state.notifications];
       for (const n of effectResult.notifications) {
@@ -578,6 +628,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     setTimeout(() => {
       get().checkAndTriggerMails();
       get().checkEndingUnlocks();
+      get().checkEventChainTriggers(choiceId);
       if (get().settings.autoSave) {
         get().autoSaveGame();
       }
@@ -703,6 +754,180 @@ export const useGameStore = create<GameState>((set, get) => ({
         ]
       };
     });
+  },
+
+  startTravel: (fromPlanetId, fromPlanetName, toPlanetId, toPlanetName) => {
+    const route = getRouteBetweenPlanets(fromPlanetId, toPlanetId);
+    set({
+      pendingTravelLog: {
+        id: `travel_${Date.now()}`,
+        fromPlanetId,
+        fromPlanetName,
+        toPlanetId,
+        toPlanetName,
+        departureTime: Date.now(),
+        arrivalTime: 0,
+        routeRisk: route?.riskLevel || 'low',
+        eventsEncountered: [],
+        rewards: { items: [], clues: [], reputationChanges: [] }
+      }
+    });
+  },
+
+  completeTravel: () => {
+    set((state) => {
+      if (!state.pendingTravelLog) return state;
+
+      const completedLog: TravelLog = {
+        ...state.pendingTravelLog,
+        arrivalTime: Date.now()
+      };
+
+      return {
+        save: {
+          ...state.save,
+          currentPlanetId: state.pendingTravelLog.toPlanetId,
+          travelLogs: [completedLog, ...state.save.travelLogs]
+        },
+        pendingTravelLog: null
+      };
+    });
+
+    setTimeout(() => {
+      get().processPendingEventChains('travel');
+      if (get().settings.autoSave) {
+        get().autoSaveGame();
+      }
+    }, 300);
+  },
+
+  addEventToTravelLog: (eventId, eventTitle, eventType, choiceId, choiceText, effects) => {
+    set((state) => {
+      if (!state.pendingTravelLog) return state;
+
+      const logEvent: TravelLogEvent = {
+        eventId,
+        eventTitle,
+        eventType: eventType as TravelLogEvent['eventType'],
+        choiceId,
+        choiceText,
+        effects,
+        timestamp: Date.now()
+      };
+
+      return {
+        pendingTravelLog: {
+          ...state.pendingTravelLog,
+          eventsEncountered: [...state.pendingTravelLog.eventsEncountered, logEvent]
+        }
+      };
+    });
+  },
+
+  checkEventChainTriggers: (choiceId) => {
+    const state = get();
+    const pending: { eventId: string; delay: string }[] = [];
+
+    for (const chain of eventChains) {
+      for (const sub of chain.subsequentEvents) {
+        if (sub.triggerChoiceId === choiceId) {
+          if (sub.delay === 'immediate') {
+            const event = randomEvents.find(e => e.id === sub.nextEventId);
+            if (event) {
+              set({ currentEvent: event });
+            }
+          } else if (sub.delay === 'delayed_mail') {
+            const mailTemplate = mailTemplates.find(m => m.id === sub.nextEventId);
+            if (mailTemplate && !state.save.mails.some(m => m.id === mailTemplate.id)) {
+              get().addMail(createMailFromTemplate(mailTemplate));
+            }
+          } else {
+            pending.push({ eventId: sub.nextEventId, delay: sub.delay });
+          }
+        }
+      }
+    }
+
+    if (pending.length > 0) {
+      set((state) => ({
+        pendingEventChainTriggers: [...state.pendingEventChainTriggers, ...pending]
+      }));
+    }
+  },
+
+  processPendingEventChains: (trigger) => {
+    const state = get();
+    const delayType = trigger === 'travel' ? 'next_travel' : 'next_chapter';
+    const toProcess = state.pendingEventChainTriggers.filter(p => p.delay === delayType);
+    const remaining = state.pendingEventChainTriggers.filter(p => p.delay !== delayType);
+
+    if (toProcess.length > 0) {
+      const event = randomEvents.find(e => e.id === toProcess[0].eventId);
+      if (event && !state.currentEvent) {
+        set({
+          currentEvent: event,
+          pendingEventChainTriggers: toProcess.length > 1 ? [...toProcess.slice(1), ...remaining] : remaining
+        });
+      } else {
+        set({ pendingEventChainTriggers: remaining });
+      }
+    }
+  },
+
+  combineItems: (item1Id, item2Id, resultId, description) => {
+    const state = get();
+    const result = tryCombineItems(item1Id, item2Id);
+
+    if (!result.success || result.result?.id !== resultId) return false;
+
+    set((state) => {
+      const newInventory = state.save.inventory.filter(i => i.itemId !== item1Id && i.itemId !== item2Id);
+      const existing = newInventory.find(i => i.itemId === resultId);
+      if (existing) {
+        existing.quantity += 1;
+      } else {
+        newInventory.push({ itemId: resultId, quantity: 1, obtainedAt: Date.now() });
+      }
+
+      const combineChoice: PlayerChoice = {
+        id: `choice_${Date.now()}`,
+        source: 'item_combine',
+        chapterId: 'inventory',
+        sceneId: `combine_${item1Id}_${item2Id}`,
+        choiceId: `combine_${resultId}`,
+        choiceText: description,
+        timestamp: Date.now(),
+        isKeyChoice: false,
+        consequences: [`item:${resultId}`],
+        context: '物品合成'
+      };
+
+      return {
+        save: {
+          ...state.save,
+          inventory: newInventory,
+          choices: [...state.save.choices, combineChoice]
+        },
+        notifications: [
+          ...state.notifications,
+          {
+            id: `notif_${Date.now()}`,
+            type: 'item',
+            title: '合成成功',
+            message: result.description || '获得新物品',
+            timestamp: Date.now()
+          }
+        ]
+      };
+    });
+
+    setTimeout(() => {
+      if (get().settings.autoSave) {
+        get().autoSaveGame();
+      }
+    }, 500);
+
+    return true;
   },
 
   toggleBgm: () => {

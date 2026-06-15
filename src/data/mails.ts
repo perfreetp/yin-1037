@@ -218,7 +218,7 @@ export const mailTemplates: MailTemplate[] = [
         text: '回信："我会继续调查，不会被你们吓倒。"',
         effects: [
           { type: 'reputation', target: '银河议会', amount: -20 },
-          { type: 'achievement', value: '真相探索者' }
+          { type: 'achievement', value: 'truth_seeker' }
         ]
       },
       {
@@ -257,6 +257,32 @@ export const mailTemplates: MailTemplate[] = [
         effects: [
           { type: 'clue', value: '真结局路线开启' },
           { type: 'achievement', value: '命运的使者' }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'mail_event_rescued_thanks',
+    from: '被救者·艾伦',
+    subject: '来自被救者的感谢',
+    content: `尊敬的信使大人：\n\n我是您在小行星带救下的那个人。我叫艾伦，是一名自由商人。\n\n那天如果没有您，我可能已经死在那片冰冷的虚空中了。\n\n这枚星晶是我祖父传下来的，据说蕴含着古代文明的力量。请收下它，这是我能拿出的最贵重的东西。\n\n另外，我在废铁城有一些朋友，如果您需要什么帮助，尽管提我的名字。\n\n从今以后，您的事就是我的事。\n\n永远感激您的\n艾伦·史密斯`,
+    type: 'side',
+    replyOptions: [
+      {
+        id: 'reply_accept',
+        text: '回信："感谢你的心意，我收下了。"',
+        effects: [
+          { type: 'item', value: 'star_crystal' },
+          { type: 'reputation', target: '自由联盟', amount: 15 },
+          { type: 'clue', value: '被救者的真实身份' }
+        ]
+      },
+      {
+        id: 'reply_decline',
+        text: '回信："救你只是举手之劳，礼物太贵重了。"',
+        effects: [
+          { type: 'reputation', target: '自由联盟', amount: 20 },
+          { type: 'affection', target: 'kairo', amount: 5 }
         ]
       }
     ]

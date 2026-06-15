@@ -33,6 +33,7 @@ export interface InventoryItem {
 
 export interface PlayerChoice {
   id: string;
+  source: ChoiceSource;
   chapterId: string;
   sceneId: string;
   choiceId: string;
@@ -40,9 +41,13 @@ export interface PlayerChoice {
   timestamp: number;
   isKeyChoice: boolean;
   consequences: string[];
+  context?: string;
 }
 
 export type MailType = 'main' | 'side' | 'hidden';
+export type ChoiceSource = 'main_story' | 'navigation' | 'mail_reply' | 'item_combine';
+export type RouteRiskLevel = 'safe' | 'low' | 'medium' | 'high' | 'extreme';
+export type TravelEventType = 'storm' | 'merchant' | 'distress' | 'discovery' | 'pirate' | 'none';
 
 export interface ReplyOption {
   id: string;
@@ -64,6 +69,55 @@ export interface Mail {
   timestamp: number;
 }
 
+export interface PlanetRoute {
+  fromPlanetId: string;
+  toPlanetId: string;
+  distance: number;
+  riskLevel: RouteRiskLevel;
+  estimatedTime: string;
+  possibleEvents: TravelEventType[];
+  routeDescription: string;
+}
+
+export interface TravelLog {
+  id: string;
+  fromPlanetId: string;
+  fromPlanetName: string;
+  toPlanetId: string;
+  toPlanetName: string;
+  departureTime: number;
+  arrivalTime: number;
+  routeRisk: RouteRiskLevel;
+  eventsEncountered: TravelLogEvent[];
+  rewards: {
+    items: string[];
+    clues: string[];
+    reputationChanges: { faction: string; amount: number }[];
+  };
+}
+
+export interface TravelLogEvent {
+  eventId: string;
+  eventTitle: string;
+  eventType: TravelEventType;
+  choiceId: string;
+  choiceText: string;
+  effects: string[];
+  timestamp: number;
+}
+
+export interface EventChain {
+  id: string;
+  name: string;
+  description: string;
+  startingEventId: string;
+  subsequentEvents: {
+    triggerChoiceId: string;
+    nextEventId: string;
+    delay: 'immediate' | 'next_travel' | 'next_chapter' | 'delayed_mail';
+  }[];
+}
+
 export interface PlayerSave {
   id: string;
   timestamp: number;
@@ -79,6 +133,9 @@ export interface PlayerSave {
   achievements: string[];
   choices: PlayerChoice[];
   mails: Mail[];
+  travelLogs: TravelLog[];
+  currentPlanetId: string;
+  eventChainProgress: Record<string, string>;
   playTime: number;
   settings: GameSettings;
 }
@@ -217,14 +274,19 @@ export interface Ending {
   cgImage: string;
   storyText: string;
   unlockConditions: UnlockCondition[];
+  routeHint: string;
+  keyChoices: string[];
+  characterRoutes: string[];
 }
 
 export interface RandomEvent {
   id: string;
   title: string;
   description: string;
+  eventType: TravelEventType;
   probability: number;
   triggerLocation: string[];
+  chainId?: string;
   choices: Choice[];
 }
 

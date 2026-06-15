@@ -15,7 +15,7 @@ const categoryTabs: { key: ItemCategory | 'all'; label: string; icon: typeof Pac
 ];
 
 export default function Inventory() {
-  const { save, addItemToInventory, removeItemFromInventory, addNotification } = useGameStore();
+  const { save, combineItems: storeCombineItems } = useGameStore();
   const [activeTab, setActiveTab] = useState<ItemCategory | 'all'>('all');
   const [selectedItem, setSelectedItem] = useState<string | null>(null);
   const [combineMode, setCombineMode] = useState(false);
@@ -42,20 +42,30 @@ export default function Inventory() {
         if (newCombine.length === 2) {
           const result = tryCombineItems(newCombine[0], newCombine[1]);
           if (result.success && result.result) {
-            removeItemFromInventory(newCombine[0]);
-            removeItemFromInventory(newCombine[1]);
-            addItemToInventory(result.result.id);
-            setCombineResult({
-              success: true,
-              description: result.description,
-              itemName: result.result.name,
-              itemIcon: result.result.icon
-            });
-            addNotification({
-              type: 'item',
-              title: '合成成功',
-              message: result.result.id
-            });
+            const item1 = getItemById(newCombine[0]);
+            const item2 = getItemById(newCombine[1]);
+            const description = `合成 ${item1?.name || '物品'} + ${item2?.name || '物品'}`;
+
+            const success = storeCombineItems(
+              newCombine[0],
+              newCombine[1],
+              result.result.id,
+              description
+            );
+
+            if (success) {
+              setCombineResult({
+                success: true,
+                description: result.description,
+                itemName: result.result.name,
+                itemIcon: result.result.icon
+              });
+            } else {
+              setCombineResult({
+                success: false,
+                description: '合成失败，请重试...'
+              });
+            }
           } else {
             setCombineResult({
               success: false,

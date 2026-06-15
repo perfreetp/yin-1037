@@ -107,6 +107,7 @@ export default function ChapterPlay() {
 
       const playerChoice: PlayerChoice = {
         id: `choice_${Date.now()}`,
+        source: 'main_story',
         chapterId: chapter.id,
         sceneId: currentScene.id,
         choiceId: choice.id,
