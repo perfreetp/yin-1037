@@ -1,13 +1,14 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { PageLayout } from '@/components/layout/PageLayout';
 import { planets } from '@/data/events';
 import { useGameStore } from '@/store/gameStore';
 import type { Planet } from '@/types';
-import { X, MapPin } from 'lucide-react';
+import { X, MapPin, Rocket } from 'lucide-react';
 
 export default function StarMap() {
   const [selectedPlanet, setSelectedPlanet] = useState<Planet | null>(null);
-  const { save } = useGameStore();
+  const [isTraveling, setIsTraveling] = useState(false);
+  const { save, triggerRandomEvent } = useGameStore();
 
   const factionColors: Record<string, string> = {
     '织星族': '#c77dff',
@@ -17,6 +18,19 @@ export default function StarMap() {
     '银河议会': '#ef476f',
     '未知': '#06d6a0'
   };
+
+  const handlePlanetSelect = useCallback((planet: Planet) => {
+    setIsTraveling(true);
+
+    setTimeout(() => {
+      const eventTriggered = triggerRandomEvent('space_travel');
+      setIsTraveling(false);
+
+      if (!eventTriggered) {
+        setSelectedPlanet(planet);
+      }
+    }, 800);
+  }, [triggerRandomEvent]);
 
   return (
     <PageLayout title="星图">
@@ -53,13 +67,15 @@ export default function StarMap() {
             return (
               <button
                 key={planet.id}
-                onClick={() => isUnlocked && setSelectedPlanet(planet)}
-                className="absolute -translate-x-1/2 -translate-y-1/2 transition-transform hover:scale-110 active:scale-95"
+                onClick={() => isUnlocked && !isTraveling && handlePlanetSelect(planet)}
+                className={`absolute -translate-x-1/2 -translate-y-1/2 transition-transform ${
+                  isTraveling ? 'opacity-50 cursor-wait' : 'hover:scale-110 active:scale-95'
+                }`}
                 style={{
                   left: `${planet.position.x}%`,
                   top: `${planet.position.y}%`
                 }}
-                disabled={!isUnlocked}
+                disabled={!isUnlocked || isTraveling}
               >
                 <div className="relative">
                   {isUnlocked && (
@@ -100,12 +116,24 @@ export default function StarMap() {
           })}
         </div>
 
+        {isTraveling && (
+          <div className="mt-4 p-4 rounded-xl border border-cyan-500/20 bg-cyan-500/5">
+            <div className="flex items-center justify-center gap-3">
+              <Rocket size={20} className="text-cyan-400 animate-bounce" />
+              <p className="text-sm text-cyan-400">星际航行中...</p>
+            </div>
+          </div>
+        )}
+
         <div className="mt-4 grid grid-cols-2 gap-2">
           {planets.filter((p) => p.unlocked).map((planet) => (
             <button
               key={planet.id}
-              onClick={() => setSelectedPlanet(planet)}
-              className="p-3 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-left transition-all"
+              onClick={() => !isTraveling && handlePlanetSelect(planet)}
+              disabled={isTraveling}
+              className={`p-3 rounded-xl border border-white/10 bg-white/5 transition-all ${
+                isTraveling ? 'opacity-50 cursor-wait' : 'hover:bg-white/10'
+              } text-left`}
             >
               <div className="flex items-center gap-2">
                 <div

@@ -3,16 +3,17 @@ import { PageLayout } from '@/components/layout/PageLayout';
 import { getCharacterById } from '@/data/characters';
 import { useGameStore } from '@/store/gameStore';
 import { getRelationStatusName } from '@/utils/conditions';
-import { ArrowLeft, Lock, Heart, Shield, User } from 'lucide-react';
+import { ArrowLeft, Lock, Heart, Shield, User, EyeOff } from 'lucide-react';
 
 export default function CharacterDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { save } = useGameStore();
+  const { save, settings } = useGameStore();
 
   const character = getCharacterById(id || '');
   const relation = save.characterRelations[id || ''];
   const isUnlocked = !!relation;
+  const showSpoiler = isUnlocked || !settings.spoilerFree;
 
   if (!character) {
     return (
@@ -55,6 +56,13 @@ export default function CharacterDetail() {
         </div>
 
         <div className="px-4 -mt-6 relative z-10">
+          {settings.spoilerFree && !isUnlocked && (
+            <div className="mb-4 p-3 rounded-xl border border-cyan-500/20 bg-cyan-500/5 flex items-center gap-2">
+              <EyeOff size={16} className="text-cyan-400 flex-shrink-0" />
+              <p className="text-xs text-cyan-400">无剧透模式已开启 - 角色敏感信息已隐藏</p>
+            </div>
+          )}
+
           <div className="p-5 rounded-2xl backdrop-blur-xl border border-white/10 bg-[#0a1628]/90">
             <div className="text-center mb-4">
               <h1
@@ -63,10 +71,10 @@ export default function CharacterDetail() {
                 }`}
                 style={{ fontFamily: "'Cinzel', 'Noto Serif SC', serif" }}
               >
-                {isUnlocked ? character.name : '???'}
+                {showSpoiler ? character.name : '???'}
               </h1>
               <p className={`text-sm ${isUnlocked ? 'text-gray-400' : 'text-gray-700'}`}>
-                {isUnlocked ? character.title : '资料未解锁'}
+                {showSpoiler ? character.title : '资料未解锁'}
               </p>
             </div>
 
@@ -98,7 +106,9 @@ export default function CharacterDetail() {
                     <span className="w-1 h-3 bg-amber-400 rounded-full" />
                     所属阵营
                   </h3>
-                  <p className="text-sm text-purple-300">{character.faction}</p>
+                  <p className="text-sm text-purple-300">
+                    {showSpoiler ? character.faction : '???'}
+                  </p>
                 </div>
 
                 <div className="mb-4">
@@ -107,7 +117,7 @@ export default function CharacterDetail() {
                     简介
                   </h3>
                   <p className="text-sm text-gray-300 leading-relaxed">
-                    {character.description}
+                    {showSpoiler ? character.description : '与角色互动后解锁角色简介'}
                   </p>
                 </div>
 
@@ -116,16 +126,20 @@ export default function CharacterDetail() {
                     <span className="w-1 h-3 bg-amber-400 rounded-full" />
                     性格标签
                   </h3>
-                  <div className="flex flex-wrap gap-2">
-                    {character.personalityTags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="px-3 py-1 rounded-full text-xs bg-white/5 border border-white/10 text-gray-300"
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
+                  {showSpoiler ? (
+                    <div className="flex flex-wrap gap-2">
+                      {character.personalityTags.map((tag) => (
+                        <span
+                          key={tag}
+                          className="px-3 py-1 rounded-full text-xs bg-white/5 border border-white/10 text-gray-300"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-600">???</p>
+                  )}
                 </div>
 
                 <div>
@@ -133,25 +147,32 @@ export default function CharacterDetail() {
                     <span className="w-1 h-3 bg-amber-400 rounded-full" />
                     背景故事
                   </h3>
-                  <div className="space-y-3">
-                    {character.backgroundStory.map((para, idx) => {
-                      const unlocked = idx < Math.floor((relation.affection + relation.trust) / 25) + 1;
-                      return (
-                        <div key={idx} className="relative">
-                          {unlocked ? (
-                            <p className="text-sm text-gray-300 leading-relaxed pl-4 border-l-2 border-white/10">
-                              {para}
-                            </p>
-                          ) : (
-                            <div className="flex items-center gap-2 text-gray-600 pl-4 border-l-2 border-white/5">
-                              <Lock size={12} />
-                              <span className="text-xs">提升好感度解锁更多故事</span>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
+                  {showSpoiler ? (
+                    <div className="space-y-3">
+                      {character.backgroundStory.map((para, idx) => {
+                        const unlocked = idx < Math.floor((relation.affection + relation.trust) / 25) + 1;
+                        return (
+                          <div key={idx} className="relative">
+                            {unlocked ? (
+                              <p className="text-sm text-gray-300 leading-relaxed pl-4 border-l-2 border-white/10">
+                                {para}
+                              </p>
+                            ) : (
+                              <div className="flex items-center gap-2 text-gray-600 pl-4 border-l-2 border-white/5">
+                                <Lock size={12} />
+                                <span className="text-xs">提升好感度解锁更多故事</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-gray-600 py-2">
+                      <Lock size={14} />
+                      <span className="text-xs">与角色互动后解锁背景故事</span>
+                    </div>
+                  )}
                 </div>
               </>
             ) : (

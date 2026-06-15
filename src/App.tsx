@@ -1,5 +1,9 @@
+import { useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { NotificationToast } from "@/components/game/NotificationToast";
+import { RandomEventModal } from "@/components/game/RandomEventModal";
+import { useBackgroundMusic } from "@/hooks/useBackgroundMusic";
+import { useGameStore } from "@/store/gameStore";
 import Home from "@/pages/Home";
 import Chapters from "@/pages/Chapters";
 import ChapterPlay from "@/pages/ChapterPlay";
@@ -12,10 +16,23 @@ import ChoicesRecord from "@/pages/ChoicesRecord";
 import EndingsGallery from "@/pages/EndingsGallery";
 import Settings from "@/pages/Settings";
 
-export default function App() {
+function AppContent() {
+  const { initSave, checkAndTriggerMails, checkEndingUnlocks } = useGameStore();
+  useBackgroundMusic();
+
+  useEffect(() => {
+    initSave();
+
+    setTimeout(() => {
+      checkAndTriggerMails();
+      checkEndingUnlocks();
+    }, 500);
+  }, [initSave, checkAndTriggerMails, checkEndingUnlocks]);
+
   return (
-    <Router>
+    <>
       <NotificationToast />
+      <RandomEventModal />
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/chapters" element={<Chapters />} />
@@ -29,6 +46,14 @@ export default function App() {
         <Route path="/endings" element={<EndingsGallery />} />
         <Route path="/settings" element={<Settings />} />
       </Routes>
+    </>
+  );
+}
+
+export default function App() {
+  return (
+    <Router>
+      <AppContent />
     </Router>
   );
 }
