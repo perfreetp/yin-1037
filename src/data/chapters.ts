@@ -40,7 +40,7 @@ export const chapters: Chapter[] = [
         ],
         choices: [
           {
-            id: 'c1',
+            id: 'ch1_s1_c1',
             text: '"保证完成任务！"（充满信心地接受）',
             isKeyChoice: false,
             nextSceneId: 'ch1_s2',
@@ -49,7 +49,7 @@ export const chapters: Chapter[] = [
             ]
           },
           {
-            id: 'c2',
+            id: 'ch1_s1_c2',
             text: '"请问……任务有什么特别需要注意的吗？"（谨慎询问）',
             isKeyChoice: false,
             nextSceneId: 'ch1_s2_alt',
@@ -87,7 +87,7 @@ export const chapters: Chapter[] = [
         ],
         choices: [
           {
-            id: 'c1',
+            id: 'ch1_s2_c1',
             text: '"那就拜托你了，凯洛。"（友好地回应）',
             isKeyChoice: false,
             nextSceneId: 'ch1_s3',
@@ -96,7 +96,7 @@ export const chapters: Chapter[] = [
             ]
           },
           {
-            id: 'c2',
+            id: 'ch1_s2_c2',
             text: '"你的手……是怎么回事？"（好奇地问）',
             isKeyChoice: true,
             nextSceneId: 'ch1_s3_alt',
@@ -151,12 +151,12 @@ export const chapters: Chapter[] = [
         ],
         timedChoice: {
           timeLimit: 10,
-          defaultChoiceId: 'c2',
+          defaultChoiceId: 'ch1_s3_c2',
           choices: [
             {
-              id: 'c1',
+              id: 'ch1_s3_c1',
               text: '冲向控制台手动操作',
-              isKeyChoice: false,
+              isKeyChoice: true,
               nextSceneId: 'ch1_s4_a',
               effects: [
                 { type: 'affection', target: 'kairo', amount: 15 },
@@ -164,7 +164,7 @@ export const chapters: Chapter[] = [
               ]
             },
             {
-              id: 'c2',
+              id: 'ch1_s3_c2',
               text: '抓紧扶手等待凯洛处理',
               isKeyChoice: false,
               nextSceneId: 'ch1_s4_b',
@@ -282,7 +282,7 @@ export const chapters: Chapter[] = [
         ],
         choices: [
           {
-            id: 'c1',
+            id: 'ch1_s5_c1',
             text: '（右手抚胸，恭敬行礼）"公主殿下，这是协会委托我递送的信函。"',
             isKeyChoice: true,
             nextSceneId: 'ch1_s6_good',
@@ -292,7 +292,7 @@ export const chapters: Chapter[] = [
             ]
           },
           {
-            id: 'c2',
+            id: 'ch1_s5_c2',
             text: '"公主你好！这是给你的信。"（随意递出）',
             isKeyChoice: true,
             nextSceneId: 'ch1_s6_bad',
@@ -337,7 +337,7 @@ export const chapters: Chapter[] = [
         ],
         choices: [
           {
-            id: 'c1',
+            id: 'ch1_s6_good_c1',
             text: '"我愿意帮助您，公主殿下。"',
             isKeyChoice: true,
             nextSceneId: 'ch1_end_good',
@@ -381,6 +381,7 @@ export const chapters: Chapter[] = [
         id: 'ch1_end_good',
         chapterId: 'ch1',
         background: '🌅',
+        isEnding: true,
         dialogues: [
           {
             id: 'd1',
@@ -395,7 +396,7 @@ export const chapters: Chapter[] = [
         ],
         choices: [
           {
-            id: 'c1',
+            id: 'ch1_end_good_c1',
             text: '返回章节列表',
             isKeyChoice: false,
             nextSceneId: 'ch1_s1',
@@ -407,6 +408,7 @@ export const chapters: Chapter[] = [
         id: 'ch1_end_neutral',
         chapterId: 'ch1',
         background: '🌅',
+        isEnding: true,
         dialogues: [
           {
             id: 'd1',
@@ -421,7 +423,7 @@ export const chapters: Chapter[] = [
         ],
         choices: [
           {
-            id: 'c1',
+            id: 'ch1_end_neutral_c1',
             text: '返回章节列表',
             isKeyChoice: false,
             nextSceneId: 'ch1_s1',
@@ -468,7 +470,7 @@ export const chapters: Chapter[] = [
         ],
         choices: [
           {
-            id: 'c1',
+            id: 'ch2_s1_c1',
             text: '"暗影教团……是个什么样的组织？"',
             isKeyChoice: false,
             nextSceneId: 'ch2_s2',
@@ -477,7 +479,7 @@ export const chapters: Chapter[] = [
             ]
           },
           {
-            id: 'c2',
+            id: 'ch2_s1_c2',
             text: '"我们直接去找她吧。"',
             isKeyChoice: false,
             nextSceneId: 'ch2_s3',
@@ -541,10 +543,10 @@ export const chapters: Chapter[] = [
         ],
         timedChoice: {
           timeLimit: 15,
-          defaultChoiceId: 'c2',
+          defaultChoiceId: 'ch2_s3_c2',
           choices: [
             {
-              id: 'c1',
+              id: 'ch2_s3_c1',
               text: '"无论真相是什么，我都要知道。"',
               isKeyChoice: true,
               nextSceneId: 'ch2_s4_truth',
@@ -554,7 +556,7 @@ export const chapters: Chapter[] = [
               ]
             },
             {
-              id: 'c2',
+              id: 'ch2_s3_c2',
               text: '"你在故弄玄虚吧？"',
               isKeyChoice: false,
               nextSceneId: 'ch2_s4_doubt',
@@ -599,13 +601,14 @@ export const chapters: Chapter[] = [
         ],
         choices: [
           {
-            id: 'c1',
+            id: 'ch2_s4_truth_c1',
             text: '"谢谢你，塞拉芬。"',
-            isKeyChoice: false,
+            isKeyChoice: true,
             nextSceneId: 'ch2_end_good',
             effects: [
               { type: 'item', value: 'encrypted_data' },
-              { type: 'clue', value: '寻找AI诺瓦' }
+              { type: 'clue', value: '寻找AI诺瓦' },
+              { type: 'trust', target: 'seraphine', amount: 10 }
             ]
           }
         ]
@@ -641,6 +644,7 @@ export const chapters: Chapter[] = [
         id: 'ch2_end_good',
         chapterId: 'ch2',
         background: '🌅',
+        isEnding: true,
         dialogues: [
           {
             id: 'd1',
@@ -655,7 +659,7 @@ export const chapters: Chapter[] = [
         ],
         choices: [
           {
-            id: 'c1',
+            id: 'ch2_end_good_c1',
             text: '返回章节列表',
             isKeyChoice: false,
             nextSceneId: 'ch2_s1',
@@ -667,6 +671,7 @@ export const chapters: Chapter[] = [
         id: 'ch2_end_neutral',
         chapterId: 'ch2',
         background: '🌅',
+        isEnding: true,
         dialogues: [
           {
             id: 'd1',
@@ -681,7 +686,7 @@ export const chapters: Chapter[] = [
         ],
         choices: [
           {
-            id: 'c1',
+            id: 'ch2_end_neutral_c1',
             text: '返回章节列表',
             isKeyChoice: false,
             nextSceneId: 'ch2_s1',
@@ -747,7 +752,7 @@ export const chapters: Chapter[] = [
         ],
         choices: [
           {
-            id: 'c1',
+            id: 'ch3_s2_c1',
             text: '"因为这是我的职责。"',
             isKeyChoice: false,
             nextSceneId: 'ch3_s3',
@@ -756,7 +761,7 @@ export const chapters: Chapter[] = [
             ]
           },
           {
-            id: 'c2',
+            id: 'ch3_s2_c2',
             text: '"因为莱拉公主需要帮助。"',
             isKeyChoice: true,
             nextSceneId: 'ch3_s3',
@@ -766,7 +771,7 @@ export const chapters: Chapter[] = [
             ]
           },
           {
-            id: 'c3',
+            id: 'ch3_s2_c3',
             text: '"因为我想知道真相。"',
             isKeyChoice: true,
             nextSceneId: 'ch3_s3',
@@ -823,7 +828,7 @@ export const chapters: Chapter[] = [
         ],
         choices: [
           {
-            id: 'c1',
+            id: 'ch3_s4_c1',
             text: '帮助凯洛组装硬件',
             isKeyChoice: false,
             nextSceneId: 'ch3_s5',
@@ -833,7 +838,7 @@ export const chapters: Chapter[] = [
             ]
           },
           {
-            id: 'c2',
+            id: 'ch3_s4_c2',
             text: '帮助诺瓦编写算法',
             isKeyChoice: false,
             nextSceneId: 'ch3_s5',
@@ -878,13 +883,13 @@ export const chapters: Chapter[] = [
         ],
         choices: [
           {
-            id: 'c1',
+            id: 'ch3_s5_c1',
             text: '"这个阴谋……具体是什么？"',
             isKeyChoice: true,
             nextSceneId: 'ch3_end_good',
             effects: [
               { type: 'item', value: 'decoder' },
-              { type: 'achievement', value: '真相探索者' }
+              { type: 'achievement', value: 'truth_seeker' }
             ]
           }
         ]
@@ -893,6 +898,7 @@ export const chapters: Chapter[] = [
         id: 'ch3_end_good',
         chapterId: 'ch3',
         background: '🌅',
+        isEnding: true,
         dialogues: [
           {
             id: 'd1',
@@ -907,7 +913,7 @@ export const chapters: Chapter[] = [
         ],
         choices: [
           {
-            id: 'c1',
+            id: 'ch3_end_good_c1',
             text: '返回章节列表（更多章节开发中）',
             isKeyChoice: false,
             nextSceneId: 'ch3_s1',

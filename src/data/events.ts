@@ -140,26 +140,29 @@ export const randomEvents: RandomEvent[] = [
   {
     id: 'event_storm',
     title: '离子风暴',
-    description: '突如其来的离子风暴袭击了你的飞船！你必须立即做出反应。',
-    probability: 0.2,
-    triggerLocation: ['space'],
+    description: '突如其来的离子风暴袭击了你的飞船！强烈的电磁脉冲让仪表盘疯狂闪烁，你必须立即做出反应。',
+    probability: 0.3,
+    triggerLocation: ['space_travel', 'chapter_transition'],
     choices: [
       {
-        id: 'e1_c1',
+        id: 'storm_brave',
         text: '强行穿越风暴',
-        isKeyChoice: false,
+        isKeyChoice: true,
         nextSceneId: '',
         effects: [
-          { type: 'item', value: 'stardust' }
+          { type: 'item', value: 'stardust' },
+          { type: 'reputation', target: '信使协会', amount: 5 },
+          { type: 'clue', value: '风暴中的星尘轨迹' }
         ]
       },
       {
-        id: 'e1_c2',
-        text: '绕路避开',
+        id: 'storm_dodge',
+        text: '绕路避开风暴',
         isKeyChoice: false,
         nextSceneId: '',
         effects: [
-          { type: 'clue', value: '新航线发现' }
+          { type: 'clue', value: '安全航线：风暴带北侧' },
+          { type: 'reputation', target: '信使协会', amount: 2 }
         ]
       }
     ]
@@ -167,47 +170,51 @@ export const randomEvents: RandomEvent[] = [
   {
     id: 'event_merchant',
     title: '神秘商人',
-    description: '一艘破旧的商船挡住了你的去路，船上的商人神秘兮兮地向你兜售着什么。',
-    probability: 0.15,
-    triggerLocation: ['space', 'planet_scrap'],
+    description: '一艘破旧的商船挡住了你的去路。船上的商人戴着面具，神秘兮兮地向你兜售着什么。"嘿，信使大人，要不要看看好东西？"',
+    probability: 0.25,
+    triggerLocation: ['space_travel', 'chapter_transition'],
     choices: [
       {
-        id: 'e2_c1',
+        id: 'merchant_buy',
         text: '看看他卖什么',
         isKeyChoice: false,
         nextSceneId: '',
         effects: [
-          { type: 'item', value: 'silver_feather' }
+          { type: 'item', value: 'silver_feather' },
+          { type: 'reputation', target: '自由联盟', amount: 5 }
         ]
       },
       {
-        id: 'e2_c2',
+        id: 'merchant_refuse',
         text: '婉拒并离开',
         isKeyChoice: false,
         nextSceneId: '',
-        effects: []
+        effects: [
+          { type: 'reputation', target: '信使协会', amount: 3 }
+        ]
       }
     ]
   },
   {
     id: 'event_distress',
     title: '求救信号',
-    description: '你接收到了一段微弱的求救信号……似乎来自附近的小行星带。',
-    probability: 0.1,
-    triggerLocation: ['space'],
+    description: '你接收到了一段微弱的求救信号……似乎来自附近的小行星带。信号断断续续，隐约能听到呼救声。',
+    probability: 0.2,
+    triggerLocation: ['space_travel', 'chapter_transition'],
     choices: [
       {
-        id: 'e3_c1',
+        id: 'distress_rescue',
         text: '前往救援',
         isKeyChoice: true,
         nextSceneId: '',
         effects: [
           { type: 'reputation', target: '信使协会', amount: 10 },
-          { type: 'achievement', value: '见义勇为' }
+          { type: 'item', value: 'worn_badge' },
+          { type: 'clue', value: '被救者的证词' }
         ]
       },
       {
-        id: 'e3_c2',
+        id: 'distress_ignore',
         text: '可能是陷阱，忽略',
         isKeyChoice: false,
         nextSceneId: '',

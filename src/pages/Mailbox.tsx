@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { PageLayout } from '@/components/layout/PageLayout';
 import { useGameStore } from '@/store/gameStore';
 import { Mail as MailIcon, MailOpen, Star, Eye, Reply, X } from 'lucide-react';
@@ -8,7 +8,7 @@ import { getCharacterById } from '@/data/characters';
 export default function Mailbox() {
   const { save, markMailRead, replyMail } = useGameStore();
   const [activeTab, setActiveTab] = useState<MailTypeEnum | 'all'>('all');
-  const [selectedMail, setSelectedMail] = useState<Mail | null>(null);
+  const [selectedMailId, setSelectedMailId] = useState<string | null>(null);
 
   const filteredMails = save.mails.filter(
     (m) => activeTab === 'all' || m.type === activeTab
@@ -16,8 +16,12 @@ export default function Mailbox() {
 
   const unreadCount = save.mails.filter((m) => !m.read).length;
 
+  const selectedMail = selectedMailId
+    ? save.mails.find((m) => m.id === selectedMailId) || null
+    : null;
+
   const handleSelectMail = (mail: Mail) => {
-    setSelectedMail(mail);
+    setSelectedMailId(mail.id);
     if (!mail.read) {
       markMailRead(mail.id);
     }
@@ -113,10 +117,9 @@ export default function Mailbox() {
       {selectedMail && (
         <MailDetailModal
           mail={selectedMail}
-          onClose={() => setSelectedMail(null)}
+          onClose={() => setSelectedMailId(null)}
           onReply={(replyId, effects) => {
-            replyMail(selectedMail.id, replyId, effects);
-            setSelectedMail({ ...selectedMail, replied: true, selectedReply: replyId });
+            replyMail(selectedMail!.id, replyId, effects);
           }}
         />
       )}

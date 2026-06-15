@@ -258,6 +258,10 @@ export const useGameStore = create<GameState>((set, get) => ({
         )
       }
     }));
+
+    if (get().settings.autoSave) {
+      setTimeout(() => get().autoSaveGame(), 500);
+    }
   },
 
   replyMail: (mailId, replyId, effects) => {
